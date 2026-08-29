@@ -401,3 +401,33 @@ pub enum Register {
     CR(CRs),
     DR(DRs),
 }
+
+
+
+
+bitflags! {
+    pub struct REX: u8 {
+        const B     = 0b0001;
+        const X     = 0b0010;
+        const R     = 0b0100;
+        const W     = 0b1000;
+    }
+}
+
+pub struct InstrData {
+    pub rex: REX,
+    pub null: bool,
+    pub fs: bool,
+    pub gs: bool,
+    pub oper: bool,
+    pub addr: bool,
+    pub wait: bool,
+    pub lock: bool,
+    pub rep: bool,
+}
+
+impl Default for InstrData {
+    fn default() -> Self {
+        Self { rex: REX::empty(), null: false, fs: false, gs: false, oper: false, addr: false, wait: false, lock: false, rep: false }
+    }
+}

@@ -6,7 +6,8 @@ impl CPU {
         panic!("unimplemented opcode: {}", self.ir);
     }
 
-    fn op_00(&mut self, _: &mut RAM) {
+    fn op_03(&mut self, ram: &mut RAM) {
+        let modrm = self.decode_modrm(ram);
         panic!("unimplemented opcode: {}", self.ir);
     }
 }

@@ -1,4 +1,4 @@
-use crate::{cpu::CPU, ram::RAM, reg::{Mem, Register}};
+use crate::{cpu::{CPU, modrm::ModRMType::{MEMREG, REGREG}}, ram::RAM, reg::{GPR, Mem, Register}};
 
 pub enum ModRMType {
     MEMREG,
@@ -7,17 +7,33 @@ pub enum ModRMType {
 
 pub struct ModRM<'a> {
     addr: Mem,
-    reg: &'a Register,
+    reg1: &'a Register,
+    reg2: &'a Register,
     order: ModRMType,
 }
 
 impl CPU {
+    fn instr_is_64bit(&self) -> bool {
+        // self.ir_data
+    }
+
     pub fn decode_modrm(&mut self, ram: &mut RAM) -> ModRM<'_> {
         self.read_instr(ram);
-        self.read_instr(ram);
         let modrm = self.ir;
-        println!("{}", modrm);
 
-        ModRM { addr: Mem { r: 0 }, reg: &Register::GPR(crate::reg::GPR { sr: 0 }), order: ModRMType::MEMREG }
+        let md  = (self.ir & 0b11000000) >> 6;
+        let rm  = (self.ir & 0b00111000) >> 3;
+        let reg = (self.ir & 0b00000111) >> 0;
+
+        let order = if md == 3 { REGREG } else { MEMREG };
+
+        // if self.
+
+        ModRM {
+            addr: Mem { r: 0 },
+            reg1: &Register::GPR(GPR { sr: 0 }),
+            reg2: &Register::GPR(GPR { sr: 0 }),
+            order: ModRMType::MEMREG
+        }
     }
 }

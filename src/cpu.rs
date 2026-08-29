@@ -1,4 +1,4 @@
-use crate::{cpu::msr::{IA32EFER, MSRs}, ram::RAM, reg::{CR0, CRVals, CRs, DR6, DR7, DRVals, DRs, DTR, FR, GPR, GPRs, IPR, SR, SRs}};
+use crate::{cpu::msr::{IA32EFER, MSRs}, ram::RAM, reg::{CR0, CRVals, CRs, DR6, DR7, DRVals, DRs, DTR, FR, GPR, GPRs, IPR, InstrData, SR, SRs}};
 
 mod modrm;
 mod reg;
@@ -21,6 +21,7 @@ pub struct CPU {
     tr: SR,
 
     ir: u8,
+    ir_data: InstrData,
     cache_addr: Option<u32>,
 }
 
@@ -39,6 +40,7 @@ impl CPU {
             ldtr: SR::new(0),
             tr: SR::new(0),
             ir: 0,
+            ir_data: InstrData::default(),
             cache_addr: None,
         };
 
