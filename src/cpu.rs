@@ -4,6 +4,7 @@ mod modrm;
 mod reg;
 mod rw;
 mod msr;
+mod opcodes;
 
 pub struct CPU {
     gprs: [GPR; 16],
@@ -120,6 +121,7 @@ impl CPU {
     }
 
     pub fn run(&mut self, ram: &mut RAM) {
-        self.decode_modrm(ram);
+        self.read_instr(ram);
+        CPU::OPCODES[self.ir as usize](self, ram);
     }
 }
