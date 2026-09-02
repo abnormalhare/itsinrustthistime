@@ -6,7 +6,7 @@ struct Address {
 }
 
 pub struct RAM {
-    data: [u8; 0x10000],
+    data: Box<[u8]>,
     file: File,
     addrs: BTreeMap<u64, Address>,
     offset: u64,
@@ -14,9 +14,9 @@ pub struct RAM {
 }
 
 enum InitError {
-    FileReadError(Error),
-    FileInvalid,
-    FileCorrupted,
+    ReadError(Error),
+    InvalidFile,
+    CorruptedFile,
 }
 
 enum FileAddrSizeError {
@@ -32,14 +32,14 @@ enum LoadFromError {
 impl RAM {
     pub fn new(filename: &str) -> Self {
         let file = File::open(filename)
-            .expect(format!("File {} does not exist!", filename).as_str());
+            .unwrap_or_else(|_| panic!("File {filename} does not exist!"));
 
         if let Err(err) = file.lock() {
-            println!("Failed to get lock on file {}: {}", filename, err);
+            println!("Failed to get lock on file {filename}: {err}");
         }
 
-        let mut ram = RAM {
-            data: [0; 0x10000],
+        let mut ram = Self {
+            data: vec![0; 0x10000].into_boxed_slice(),
             file,
             addrs: BTreeMap::new(),
             offset: 0,
@@ -47,13 +47,13 @@ impl RAM {
         };
 
         if let Err(err) = ram.read_in() { match err {
-            InitError::FileReadError(ioerr) => {
-                println!("Failed to read file: {}", ioerr);
+            InitError::ReadError(ioerr) => {
+                println!("Failed to read file: {ioerr}");
             },
-            InitError::FileInvalid => {
+            InitError::InvalidFile => {
                 println!("File loaded is not a CS86 file.");
             },
-            InitError::FileCorrupted => {
+            InitError::CorruptedFile => {
                 println!("File loaded is either invalid or corrupted.");
             }
         }}
@@ -61,7 +61,7 @@ impl RAM {
         ram
     }
 
-    pub fn deinit(&mut self) {
+    pub fn deinit(&self) {
         _ = self.file.unlock();
     }
 
@@ -69,24 +69,24 @@ impl RAM {
         let mut header = [0u8; 0x8];
         let bytes = self.file.read(&mut header);
         if let Err(err) = bytes {
-            return Err(InitError::FileReadError(err));
+            return Err(InitError::ReadError(err));
         }
 
         let bytes = bytes.ok().unwrap();
-        if bytes != header.len() || &header[0..4] != "CS86".as_bytes() {
-            return Err(InitError::FileInvalid)
+        if bytes != header.len() || &header[0..4] != b"CS86" {
+            return Err(InitError::InvalidFile)
         }
 
         let num_virt_addrs = header[4] as usize;
         let mut virt_addrs = vec![0u8; num_virt_addrs * 8];
         let bytes = self.file.read(&mut virt_addrs);
         if let Err(err) = bytes {
-            return Err(InitError::FileReadError(err));
+            return Err(InitError::ReadError(err));
         }
 
         let bytes = bytes.ok().unwrap();
         if bytes != virt_addrs.len() {
-            return Err(InitError::FileCorrupted);
+            return Err(InitError::CorruptedFile);
         }
 
         let mut num_virt_addrs = num_virt_addrs;

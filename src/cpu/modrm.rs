@@ -1,8 +1,8 @@
-use crate::{cpu::{CPU, modrm::ModRMType::{MEMREG, REGREG}}, ram::RAM, reg::{GPR, Mem, Register}};
+use crate::{cpu::CPU, ram::RAM, reg::{GPR, Mem, Register}};
 
 pub enum ModRMType {
-    MEMREG,
-    REGREG,
+    MemReg,
+    RegReg,
 }
 
 pub struct ModRM<'a> {
@@ -25,7 +25,7 @@ impl CPU {
         let rm  = (self.ir & 0b0011_1000) >> 3;
         let reg = (self.ir & 0b0000_0111) >> 0;
 
-        let order = if md == 3 { REGREG } else { MEMREG };
+        let order = if md == 3 { ModRMType::RegReg } else { ModRMType::MemReg };
 
         // if self.
 
@@ -33,7 +33,7 @@ impl CPU {
             addr: Mem { r: 0 },
             reg1: &Register::GPR(GPR { sr: 0 }),
             reg2: &Register::GPR(GPR { sr: 0 }),
-            order: ModRMType::MEMREG
+            order: ModRMType::MemReg
         }
     }
 }

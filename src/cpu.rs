@@ -26,8 +26,8 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(ram: &mut RAM) -> CPU {
-        let mut cpu = CPU {
+    pub fn new(ram: &mut RAM) -> Self {
+        let mut cpu = Self {
             gprs: std::array::from_fn(|_| GPR::default()),
             ip: IPR::default(),
             srs: std::array::from_fn(|_| SR::new(0)),
@@ -64,7 +64,7 @@ impl CPU {
     }
 
     fn is_real_mode(&self) -> bool {
-        let cr0: CR0 = self.get_cr(CRs::CR0).try_into().unwrap();
+        let cr0: CR0 = self.get_cr(&CRs::CR0).try_into().unwrap();
 
         let is_protected = cr0.contains(CR0::from_bits_retain(0x1));
 
@@ -72,7 +72,7 @@ impl CPU {
     }
 
     fn is_protected_mode(&self) -> bool {
-        let cr0: CR0 = self.get_cr(CRs::CR0).try_into().unwrap();
+        let cr0: CR0 = self.get_cr(&CRs::CR0).try_into().unwrap();
 
         let is_protected = cr0.contains(CR0::from_bits_retain(0x1));
         let is_in_vm = self.flags.contains(FR::from_bits_retain(0x20000));
@@ -82,7 +82,7 @@ impl CPU {
     }
 
     fn is_vm_mode(&self) -> bool {
-        let cr0: CR0 = self.get_cr(CRs::CR0).try_into().unwrap();
+        let cr0: CR0 = self.get_cr(&CRs::CR0).try_into().unwrap();
 
         let is_protected = cr0.contains(CR0::from_bits_retain(0x1));
         let is_in_vm = self.flags.contains(FR::from_bits_retain(0x20000));
@@ -93,7 +93,7 @@ impl CPU {
 
     // TODO: add descriptor bits
     fn is_long_mode(&self) -> bool {
-        let cr0: CR0 = self.get_cr(CRs::CR0).try_into().unwrap();
+        let cr0: CR0 = self.get_cr(&CRs::CR0).try_into().unwrap();
 
         let is_protected = cr0.contains(CR0::from_bits_retain(0x1));
         let is_in_vm = self.flags.contains(FR::from_bits_retain(0x20000));
@@ -125,6 +125,6 @@ impl CPU {
 
     pub fn run(&mut self, ram: &mut RAM) {
         self.read_instr(ram);
-        CPU::OPCODES[self.ir as usize](self, ram);
+        Self::OPCODES[self.ir as usize](self, ram);
     }
 }

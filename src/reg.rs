@@ -414,6 +414,8 @@ bitflags! {
     }
 }
 
+// all of these bools are independent
+#[allow(clippy::struct_excessive_bools)]
 pub struct InstrData {
     pub rex: REX,
     pub null: bool,

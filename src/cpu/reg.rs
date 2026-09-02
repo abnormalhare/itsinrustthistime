@@ -31,13 +31,13 @@ impl IndexMut<SRs> for CPU {
 }
 
 impl CPU {
-    pub fn get_cr(&self, cr: CRs) -> CRVals {
+    pub fn get_cr(&self, cr: &CRs) -> CRVals {
         match cr {
             CRs::CR0 => CRVals::CR0(CR0::from_bits_retain(self.crs[0])),
             CRs::CR2 => CRVals::CR2(self.crs[2]),
             CRs::CR3 => {
                 let raw = self.crs[3];
-                let cr4: CR4 = self.get_cr(CRs::CR4).try_into().unwrap();
+                let cr4: CR4 = self.get_cr(&CRs::CR4).try_into().unwrap();
 
                 if cr4.contains(CR4::PCIDE) {
                     CRVals::CR3(CR3::ENABLED(
@@ -71,12 +71,7 @@ impl CPU {
             unreachable!();
         }
 
-        if let Ok(cr) = CRs::try_from(index) {
-            Ok(self.get_cr(cr))
-        } else {
-            // #ud
-            Err(())
-        }
+        CRs::try_from(index).map_or(Err(()), |cr| Ok(self.get_cr(&cr)))
     }
 
     pub fn write_cr(&mut self, index: u8, val: CRVals) {
@@ -91,7 +86,7 @@ impl CPU {
         }
     }
 
-    pub fn get_dr(&self, dr: DRs) -> DRVals {
+    pub fn get_dr(&self, dr: &DRs) -> DRVals {
         match dr {
             DRs::DR0 => DRVals::DR0(self.drs[0]),
             DRs::DR1 => DRVals::DR1(self.drs[1]),
@@ -119,12 +114,7 @@ impl CPU {
             unreachable!();
         }
 
-        if let Ok(dr) = DRs::try_from(index) {
-            Ok(self.get_dr(dr))
-        } else {
-            // #ud
-            Err(())
-        }
+        DRs::try_from(index).map_or(Err(()), |dr| Ok(self.get_dr(&dr)))
     }
 
     pub fn write_dr(&mut self, index: u8, val: DRVals) {

@@ -19,6 +19,6 @@ pub struct MSRs {
 
 impl Default for MSRs {
     fn default() -> Self {
-        MSRs { ia32_efer: IA32EFER::empty() }
+        Self { ia32_efer: IA32EFER::empty() }
     }
 }
