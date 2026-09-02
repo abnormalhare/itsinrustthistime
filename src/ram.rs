@@ -5,12 +5,15 @@ struct Address {
     file: u64,
 }
 
+type RAMIndexSize = u16;
+
+#[allow(clippy::upper_case_acronyms)]
 pub struct RAM {
     data: Box<[u8]>,
     file: File,
     addrs: BTreeMap<u64, Address>,
     offset: u64,
-    data_pos: u16,
+    data_pos: RAMIndexSize,
 }
 
 enum InitError {
@@ -20,6 +23,7 @@ enum InitError {
 }
 
 enum FileAddrSizeError {
+    CacheTooBig(u64, u64, u64),
     MetadataParsingError,
     ZeroSizeError,
 }
@@ -39,7 +43,7 @@ impl RAM {
         }
 
         let mut ram = Self {
-            data: vec![0; 0x10000].into_boxed_slice(),
+            data: vec![0; RAMIndexSize::MAX as usize].into_boxed_slice(),
             file,
             addrs: BTreeMap::new(),
             offset: 0,
@@ -95,7 +99,7 @@ impl RAM {
             let virt_addr = u32::from_le_bytes(virt_addrs[i..(i + 4)].try_into().unwrap());
             let file_addr = u32::from_le_bytes(virt_addrs[(i + 4)..(i + 8)].try_into().unwrap());
 
-            self.addrs.insert(virt_addr as u64, Address { data: None, file: file_addr as u64 });
+            self.addrs.insert(u64::from(virt_addr), Address { data: None, file: u64::from(file_addr) });
 
             num_virt_addrs -= 1;
             i += 8;
@@ -116,14 +120,18 @@ impl RAM {
         let mut iter = self.addrs.range(virt_addr..);
         _ = iter.next();
 
-        let size;
+        let size: u16;
         if let Some((_, next_val)) = iter.next() {
             let curr_file_addr = self.addrs[&virt_addr].file;
             let next_file_addr = next_val.file;
-            size = (next_file_addr - curr_file_addr) as u16;
+            let possible_size = next_file_addr - curr_file_addr;
+            if possible_size > RAMIndexSize::MAX.into() {
+                return Err(FileAddrSizeError::CacheTooBig(virt_addr, self.data.len() as u64, possible_size));
+            }
+            size = (next_file_addr - curr_file_addr).try_into().unwrap();
         } else if let Ok(metadata) = self.file.metadata() {
             let last_addr = self.addrs.last_entry().unwrap();
-            size = (metadata.len() - last_addr.get().file) as u16;
+            size = (metadata.len() - last_addr.get().file).try_into().unwrap();
         } else {
             return Err(FileAddrSizeError::MetadataParsingError);
         }
@@ -135,8 +143,11 @@ impl RAM {
         Ok(size)
     }
 
-    fn file_addr_size_handle(err: FileAddrSizeError) -> ! {
+    fn file_addr_size_handle(err: &FileAddrSizeError) -> ! {
         match err {
+            FileAddrSizeError::CacheTooBig(addr, max, curr) => panic_any(format!(
+                "ERROR: Region {addr} is {curr} bytes which is greater than {max} bytes allowed.",
+            )),
             FileAddrSizeError::MetadataParsingError => panic_any(
                 "ERROR: Somehow failed to get metadata while accessing the last address specified in header."
             ),
@@ -150,14 +161,14 @@ impl RAM {
             return Err(LoadFromError::SeekFail(file_addr, err));
         }
 
-        let data_addr: usize = data_addr as usize;
-        let res = self.file.read(&mut self.data[data_addr..(data_addr + size)]);
+        let data_addr_idx: usize = data_addr as usize;
+        let res = self.file.read(&mut self.data[data_addr_idx..(data_addr_idx + size)]);
         if let Err(err) = res {
             return Err(LoadFromError::ReadFail(file_addr, err));
         }
 
         if let Some(addr) = self.addrs.get_mut(&virt_addr) {
-            addr.data = Some(data_addr as u16);
+            addr.data = Some(data_addr);
         }
 
         Ok(())
@@ -176,46 +187,41 @@ impl RAM {
         }
 
         let size = self.get_file_addr_size(virt_addr)
-            .unwrap_or_else(|err| RAM::file_addr_size_handle(err));
+            .unwrap_or_else(|err| Self::file_addr_size_handle(&err));
 
-        let start;
-        let end;
-        if self.data.len() as u16 - self.data_pos > size {
-            start = self.data_pos;
-            end = self.data_pos + size;
+        let (start, end) = if RAMIndexSize::MAX - self.data_pos > size {
+             (self.data_pos, self.data_pos + size)
         } else {
-            start = 0;
-            end = size;
-        }
+            (0, size)
+        };
         self.data_pos = end;
 
-        for (_, addr) in self.addrs.iter_mut() {
-            if let Some(data) = addr.data {
-                if data >= start && data < end {
-                    addr.data = None;
-                }
+        for addr in self.addrs.values_mut() {
+            if let Some(data) = addr.data && data >= start && data < end {
+                addr.data = None;
             }
         }
 
         let file_addr = self.addrs[&virt_addr].file;
 
-        self.load_from_file(file_addr as u64, virt_addr, start, size as usize);
+        self.load_from_file(file_addr, virt_addr, start, size as usize)
+            .unwrap_or_else(|err| Self::load_from_handle(err));
     }
 
     fn read_unchecked(&self, cached_virt_addr: u64, virt_addr: u64) -> u8 {
         let data_idx = self.addrs[&cached_virt_addr].data;
-        if let Some(data_idx) = data_idx {
-            let data_byte = data_idx as usize + (virt_addr as usize - cached_virt_addr as usize);
-            let data = self.data[data_byte];
 
-            return data
-        } else {
-            unreachable!()
-        }
+        data_idx.map_or_else(|| unreachable!(),
+            |data_idx| {
+                let addr: usize = (virt_addr - cached_virt_addr).try_into().unwrap();
+                let data_byte = data_idx as usize + addr;
+
+                self.data[data_byte]
+            })
     }
 
     fn try_get_nearest_virt_addr(&self, virt_addr: u64) -> Option<u64> {
-        for (k, _) in self.addrs.iter() {
+        for k in self.addrs.keys() {
             if *k >= virt_addr {
                 return Some(*k);
             }
@@ -227,10 +233,8 @@ impl RAM {
     fn try_get_nearest_virt_data(&mut self, virt_addr: u64, cached_virt_addr: Option<u64>) -> Option<(u8, u64)> {
         let new_cached_virt_addr = self.try_get_nearest_virt_addr(virt_addr);
         if let Some(new_cached_virt_addr) = new_cached_virt_addr {
-            if let Some(cached_virt_addr) = cached_virt_addr {
-                if new_cached_virt_addr == cached_virt_addr {
-                    return None;
-                }
+            if let Some(cached_virt_addr) = cached_virt_addr && new_cached_virt_addr == cached_virt_addr {
+                return None;
             }
 
             self.cache_data(new_cached_virt_addr);
@@ -247,8 +251,8 @@ impl RAM {
             return false;
         }
 
-        let cache_size = self.get_file_addr_size(cached_virt_addr)
-            .unwrap_or_else(|err| RAM::file_addr_size_handle(err)) as u64;
+        let cache_size: u64 = self.get_file_addr_size(cached_virt_addr)
+            .unwrap_or_else(|err| Self::file_addr_size_handle(&err)).into();
 
         (cached_virt_addr..(cached_virt_addr+cache_size)).contains(&virt_addr)
     }
@@ -263,11 +267,11 @@ impl RAM {
 
     pub fn read(&mut self, cached_virt_addr: Option<u64>, virt_addr: u64) -> Option<(u8, u64)> {
         if let Some(cached_virt_addr) = cached_virt_addr {
-            if let Some(data) = self.try_read_cached(cached_virt_addr, virt_addr) {
-                Some((data, cached_virt_addr))
-            } else {
+            self.try_read_cached(cached_virt_addr, virt_addr).map_or_else(|| {
                 self.try_get_nearest_virt_data(virt_addr, Some(cached_virt_addr))
-            }
+            }, |data| {
+                Some((data, cached_virt_addr))
+            })
         } else {
             self.try_get_nearest_virt_data(virt_addr, None)
         }
