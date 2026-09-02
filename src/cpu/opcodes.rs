@@ -16,7 +16,7 @@ type OpcodeFunc = fn(&mut CPU, &mut RAM);
 const fn build_op_table() -> [OpcodeFunc; 0x100] {
     let mut table: [OpcodeFunc; 0x100] = [CPU::op_unimplemented; 0x100];
 
-    table[0x00] = CPU::op_00;
+    table[0x03] = CPU::op_03;
 
     table
 }

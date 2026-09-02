@@ -13,17 +13,17 @@ pub struct ModRM<'a> {
 }
 
 impl CPU {
-    fn instr_is_64bit(&self) -> bool {
-        // self.ir_data
-    }
+    // fn instr_is_64bit(&self) -> bool {
+    //     // self.ir_data
+    // }
 
     pub fn decode_modrm(&mut self, ram: &mut RAM) -> ModRM<'_> {
         self.read_instr(ram);
         let modrm = self.ir;
 
-        let md  = (self.ir & 0b11000000) >> 6;
-        let rm  = (self.ir & 0b00111000) >> 3;
-        let reg = (self.ir & 0b00000111) >> 0;
+        let md  = (self.ir & 0b1100_0000) >> 6;
+        let rm  = (self.ir & 0b0011_1000) >> 3;
+        let reg = (self.ir & 0b0000_0111) >> 0;
 
         let order = if md == 3 { REGREG } else { MEMREG };
 

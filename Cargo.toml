@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 bitflags = "2.13.1"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1}
+nursery = { level = "warn", priority = -1}

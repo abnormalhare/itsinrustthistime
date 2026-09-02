@@ -80,7 +80,7 @@ impl SR {
     }
 
     pub fn get(&self) -> u16 {
-        ((self.base & 0x000FFFF0) >> 4) as u16
+        ((self.base & 0x000F_FFF0) >> 4) as u16
     }
 
     pub fn set(&mut self, val: u16) {
@@ -122,39 +122,39 @@ impl Default for DTR {
 bitflags! {
     #[derive(Clone, Copy, PartialEq, Eq)]
     pub struct FR: u64 {
-        const CF    = 0x00000001;
-        const ON    = 0x00000002;
-        const PF    = 0x00000004;
-        const AF    = 0x00000010;
-        const ZF    = 0x00000040;
-        const SF    = 0x00000080;
-        const TF    = 0x00000100;
-        const IF    = 0x00000200;
-        const DF    = 0x00000400;
-        const OF    = 0x00000800;
-        const IOPL  = 0x00003000;
-        const NT    = 0x00004000;
-        const RF    = 0x00010000;
-        const VM    = 0x00020000;
-        const AC    = 0x00040000;
-        const VIF   = 0x00080000;
-        const VIP   = 0x00100000;
-        const ID    = 0x00200000;
+        const CF    = 0x0000_0001;
+        const ON    = 0x0000_0002;
+        const PF    = 0x0000_0004;
+        const AF    = 0x0000_0010;
+        const ZF    = 0x0000_0040;
+        const SF    = 0x0000_0080;
+        const TF    = 0x0000_0100;
+        const IF    = 0x0000_0200;
+        const DF    = 0x0000_0400;
+        const OF    = 0x0000_0800;
+        const IOPL  = 0x0000_3000;
+        const NT    = 0x0000_4000;
+        const RF    = 0x0001_0000;
+        const VM    = 0x0002_0000;
+        const AC    = 0x0004_0000;
+        const VIF   = 0x0008_0000;
+        const VIP   = 0x0010_0000;
+        const ID    = 0x0020_0000;
     }
 
     #[derive(Clone, Copy, PartialEq, Eq)]
     pub struct CR0: u64 {
-        const PE    = 0x00000001;
-        const MP    = 0x00000002;
-        const EM    = 0x00000004;
-        const TS    = 0x00000008;
-        const ET    = 0x00000010;
-        const NE    = 0x00000020;
-        const WP    = 0x00010000;
-        const AM    = 0x00040000;
-        const NW    = 0x20000000;
-        const CD    = 0x40000000;
-        const PG    = 0x80000000;
+        const PE    = 0x0000_0001;
+        const MP    = 0x0000_0002;
+        const EM    = 0x0000_0004;
+        const TS    = 0x0000_0008;
+        const ET    = 0x0000_0010;
+        const NE    = 0x0000_0020;
+        const WP    = 0x0001_0000;
+        const AM    = 0x0004_0000;
+        const NW    = 0x2000_0000;
+        const CD    = 0x4000_0000;
+        const PG    = 0x8000_0000;
     }
 
     #[derive(Clone, Copy, PartialEq, Eq)]
@@ -169,29 +169,29 @@ bitflags! {
     }
 
     pub struct CR4: u64 {
-        const VME        = 0x000001;
-        const PVI        = 0x000002;
-        const TSD        = 0x000004;
-        const DE         = 0x000008;
-        const PSE        = 0x000010;
-        const PAE        = 0x000020;
-        const MCE        = 0x000040;
-        const PGE        = 0x000080;
-        const PCE        = 0x000100;
-        const OSFXSR     = 0x000200;
-        const OSXMMEXCPT = 0x000400;
-        const UMIP       = 0x000800;
-        const LA57       = 0x001000;
-        const VMXE       = 0x002000;
-        const SMXE       = 0x004000;
-        const FSGSBASE   = 0x010000;
-        const PCIDE      = 0x020000;
-        const OSXSAVE    = 0x040000;
-        const SMEP       = 0x100000;
-        const SMAP       = 0x200000;
-        const PKE        = 0x400000;
-        const CET        = 0x800000;
-        const PKS        = 0x1000000;
+        const VME        = 0x0000_0001;
+        const PVI        = 0x0000_0002;
+        const TSD        = 0x0000_0004;
+        const DE         = 0x0000_0008;
+        const PSE        = 0x0000_0010;
+        const PAE        = 0x0000_0020;
+        const MCE        = 0x0000_0040;
+        const PGE        = 0x0000_0080;
+        const PCE        = 0x0000_0100;
+        const OSFXSR     = 0x0000_0200;
+        const OSXMMEXCPT = 0x0000_0400;
+        const UMIP       = 0x0000_0800;
+        const LA57       = 0x0000_1000;
+        const VMXE       = 0x0000_2000;
+        const SMXE       = 0x0000_4000;
+        const FSGSBASE   = 0x0001_0000;
+        const PCIDE      = 0x0002_0000;
+        const OSXSAVE    = 0x0004_0000;
+        const SMEP       = 0x0010_0000;
+        const SMAP       = 0x0020_0000;
+        const PKE        = 0x0040_0000;
+        const CET        = 0x0080_0000;
+        const PKS        = 0x0100_0000;
     }
 }
 
@@ -325,37 +325,37 @@ pub enum CRVals {
 
 bitflags! {
     pub struct DR6: u64 {
-        const B0    = 0x0001;
-        const B1    = 0x0002;
-        const B2    = 0x0004;
-        const B3    = 0x0008;
-        const BLD   = 0x0800;
-        const BK    = 0x1000;
-        const BD    = 0x2000;
-        const BS    = 0x4000;
-        const BT    = 0x8000;
+        const B0    = 0x00001;
+        const B1    = 0x00002;
+        const B2    = 0x00004;
+        const B3    = 0x00008;
+        const BLD   = 0x00800;
+        const BK    = 0x01000;
+        const BD    = 0x02000;
+        const BS    = 0x04000;
+        const BT    = 0x08000;
         const RTM   = 0x10000;
-        const ON    = 0xFFFE0000;
+        const ON    = 0xFFFE_0000;
     }
 
     pub struct DR7: u64 {
-        const L0    = 0x00000001;
-        const G0    = 0x00000002;
-        const L1    = 0x00000004;
-        const G1    = 0x00000008;
-        const L2    = 0x00000010;
-        const G2    = 0x00000020;
-        const L3    = 0x00000040;
-        const G3    = 0x00000080;
+        const L0    = 0x0000_0001;
+        const G0    = 0x0000_0002;
+        const L1    = 0x0000_0004;
+        const G1    = 0x0000_0008;
+        const L2    = 0x0000_0010;
+        const G2    = 0x0000_0020;
+        const L3    = 0x0000_0040;
+        const G3    = 0x0000_0080;
 
-        const RW0   = 0x00000300;
-        const LEN0  = 0x00000C00;
-        const RW1   = 0x00000300;
-        const LEN1  = 0x00000C00;
-        const RW2   = 0x00000300;
-        const LEN2  = 0x00000C00;
-        const RW3   = 0x00000300;
-        const LEN3  = 0x00000C00;
+        const RW0   = 0x0000_0300;
+        const LEN0  = 0x0000_0C00;
+        const RW1   = 0x0000_3000;
+        const LEN1  = 0x0000_C000;
+        const RW2   = 0x0003_0000;
+        const LEN2  = 0x000C_0000;
+        const RW3   = 0x0030_0000;
+        const LEN3  = 0x00C0_0000;
     }
 }
 

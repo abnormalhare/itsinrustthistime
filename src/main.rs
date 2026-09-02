@@ -7,8 +7,8 @@ mod cpu;
 mod ram;
 
 fn main() {
-    let mut cpu = CPU::new();
     let mut ram = RAM::new("test.bin");
+    let mut cpu = CPU::new(&mut ram);
 
     cpu.run(&mut ram);
 

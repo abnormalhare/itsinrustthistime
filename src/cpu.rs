@@ -22,11 +22,11 @@ pub struct CPU {
 
     ir: u8,
     ir_data: InstrData,
-    cache_addr: Option<u32>,
+    cache_addr: u64,
 }
 
 impl CPU {
-    pub fn new() -> CPU {
+    pub fn new(ram: &mut RAM) -> CPU {
         let mut cpu = CPU {
             gprs: std::array::from_fn(|_| GPR::default()),
             ip: IPR::default(),
@@ -41,22 +41,23 @@ impl CPU {
             tr: SR::new(0),
             ir: 0,
             ir_data: InstrData::default(),
-            cache_addr: None,
+            cache_addr: 0,
         };
+        cpu.setup_cache(ram);
 
-        cpu[GPRs::DX].ud = 0x00A70F41;
+        cpu[GPRs::DX].ud = 0x00A7_0F41;
 
-        cpu[SRs::CS].base = 0xFFFF0000;
+        cpu[SRs::CS].base = 0xFFFF_0000;
 
 
-        cpu.ip.0.d = 0x0000FFF0;
-        let cr0 = CR0::from_bits_retain(0x60000010);
+        cpu.ip.0.d = 0x0000_FFF0;
+        let cr0 = CR0::from_bits_retain(0x6000_0010);
         cpu.set_cr(CRs::CR0, CRVals::CR0(cr0));
 
-        let dr6 = DR6::from_bits_retain(0xFFFF0FF0);
+        let dr6 = DR6::from_bits_retain(0xFFFF_0FF0);
         cpu.set_dr(DRs::DR6, DRVals::DR6(dr6));
 
-        let dr7 = DR7::from_bits_retain(0x00000400);
+        let dr7 = DR7::from_bits_retain(0x0000_0400);
         cpu.set_dr(DRs::DR7, DRVals::DR7(dr7));
 
         cpu
