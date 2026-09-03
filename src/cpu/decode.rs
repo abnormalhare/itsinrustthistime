@@ -1,22 +1,35 @@
-use crate::{cpu::CPU, ram::RAM, reg::{GPRs, Mem, REX}};
+use crate::{cpu::{CPU, decode::RM::{Addr, Reg}}, ram::RAM, reg::{GPRs, Mem, REX}};
 
-#[derive(PartialEq, Eq)]
-pub enum ModRMType {
-    MemReg,
-    RegReg,
+#[derive(Clone, Copy)]
+pub struct MemoryInfo {
+    pub addr: Mem,
+    pub base: Option<u8>,
+    pub idx: Option<u8>,
+    pub off: Option<u32>,
+}
+
+#[derive(Clone, Copy)]
+pub enum RM {
+    Addr(MemoryInfo),
+    Reg(u8),
 }
 
 pub struct ModRM {
-    pub addr: Mem,
     pub reg1: u8,
-    pub reg2: Option<u8>,
-    pub rmtype: ModRMType,
+    pub reg2: RM,
 }
 
+#[derive(Clone, Copy)]
 pub enum GPRSize {
     X16(u16),
     X32(u32),
     X64(u64),
+}
+
+#[derive(PartialEq, Eq)]
+pub enum Location {
+    Address,
+    Operand,
 }
 
 impl CPU {
@@ -25,7 +38,7 @@ impl CPU {
     // }
 
     #[allow(clippy::identity_op)]
-    fn decode_sib_64(&mut self, ram: &mut RAM) -> u64 {
+    fn decode_sib_64(&mut self, ram: &mut RAM) -> MemoryInfo {
         let sib = self.read_u8(ram);
 
         let ss   = (sib & 0b1100_0000) >> 6;
@@ -33,7 +46,13 @@ impl CPU {
         let base = (sib & 0b0000_0111) >> 0;
 
         if base == 5 && ss == 0 {
-            return self.read_u32(ram).into();
+            let off = self.read_u32(ram);
+            return MemoryInfo {
+                addr: Mem { d: off },
+                base: None,
+                idx: None,
+                off: Some(off),
+            };
         }
 
         let highbyte1: u8 = self.ir_data.rex.contains(REX::B).into();
@@ -53,12 +72,25 @@ impl CPU {
             _ => unreachable!(),
         };
 
-        let addr = unsafe { if self.ir_data.rex.contains(REX::B) { self[gpr1].ur } else { self[gpr1].ud.into() } };
-        if idx == 5 {
-            addr
+        let mut addr = unsafe { if self.ir_data.rex.contains(REX::W) { self[gpr1].ur } else { self[gpr1].ud.into() } };
+        if idx == 5 && !self.ir_data.rex.contains(REX::X) {
+            MemoryInfo {
+                addr: Mem{ r: addr },
+                base: Some(reg1),
+                idx: None,
+                off: None,
+            }
         } else {
-            addr + unsafe { if self.ir_data.rex.contains(REX::X) { self[gpr2].ur } else { self[gpr2].ud.into() } } * mul
+            addr += unsafe { if self.ir_data.rex.contains(REX::W) { self[gpr2].ur } else { self[gpr2].ud.into() } } * mul;
+
+            MemoryInfo {
+                addr: Mem{ r: addr },
+                base: Some(reg1),
+                idx: Some(reg2),
+                off: None,
+            }
         }
+
     }
 
     #[allow(clippy::identity_op)]
@@ -77,35 +109,50 @@ impl CPU {
 
         if md == 3 {
             return ModRM {
-                addr: Mem { r: 0 },
                 reg1,
-                reg2: Some(reg2),
-                rmtype: ModRMType::RegReg,
+                reg2: Reg(reg2),
             };
         }
 
         let gpr: GPRs = reg2.try_into().unwrap();
-        let mut addr = unsafe { if self.ir_data.rex.contains(REX::B) { self[gpr].ur } else { self[gpr].ud.into() } };
+        let mut addr = MemoryInfo {
+            addr: unsafe {
+                if self.ir_data.rex.contains(REX::B) {
+                    Mem { r: self[gpr].ur }
+                } else {
+                    Mem { d: self[gpr].ud }
+                }
+            },
+            base: Some(reg2),
+            idx: None,
+            off: None,
+        };
 
         if rm == 4 {
             addr = self.decode_sib_64(ram);
         } else if rm == 5 && md == 1 {
-            addr = unsafe { if self.ir_data.rex.contains(REX::B) { self.ip.0.r } else { self.ip.0.d.into() } };
+            unsafe {
+                if self.ir_data.rex.contains(REX::B) {
+                    addr.addr.r = self.ip.r;
+                } else {
+                    addr.addr.d = self.ip.d;
+                }
+            }
         }
 
         if md == 1 {
-            let disp: u64 = self.read_u8(ram).into();
-            addr += disp;
+            let disp = self.read_u8(ram).into();
+            addr.off = Some(disp);
+            unsafe { addr.addr.r += u64::from(disp) };
         } else if md == 2 {
-            let disp: u64 = self.read_u32(ram).into();
-            addr += disp;
+            let disp = self.read_u32(ram);
+            addr.off = Some(disp);
+            unsafe { addr.addr.r += u64::from(disp) };
         }
 
         ModRM {
-            addr: Mem { r: addr },
             reg1,
-            reg2: None,
-            rmtype: ModRMType::MemReg,
+            reg2: Addr(addr),
         }
     }
 
@@ -113,51 +160,54 @@ impl CPU {
         self.decode_modrm_64(ram)
     }
 
-    fn decode_gpr_size_64(&mut self, gpr_idx: u8) -> GPRSize {
-        let gpr: GPRs = gpr_idx.try_into().unwrap();
-        if self.ir_data.oper {
-            return unsafe { GPRSize::X16(self[gpr].uw) };
-        }
-        if self.ir_data.rex.contains(REX::W) {
-            return unsafe { GPRSize::X64(self[gpr].ur) };
-        }
+// --- Size Decoding --- //
 
-        unsafe { GPRSize::X32(self[gpr].ud) }
+    fn decode_size_64(&self, location: &Location) -> GPRSize {
+        if location == &Location::Address && self.ir_data.addr || location == &Location::Operand && self.ir_data.oper {
+            GPRSize::X16(0)
+        } else if self.ir_data.rex.contains(REX::W) {
+            GPRSize::X64(0)
+        } else {
+            GPRSize::X32(0)
+        }
+    }
+
+    // TODO: detect real/protected/etc
+    pub fn decode_size(&self, location: &Location) -> GPRSize {
+        self.decode_size_64(location)
     }
 
     pub fn decode_gpr_size(&mut self, gpr_idx: u8) -> GPRSize {
-        self.decode_gpr_size_64(gpr_idx)
-    }
-
-    fn decode_mem_size_64(&mut self, ram: &mut RAM, addr: Mem) -> GPRSize {
-        let virt_addr: u64 = if self.ir_data.addr {
-            unsafe { addr.w.into() }
-        } else if self.ir_data.rex.contains(REX::W) {
-            unsafe { addr.r }
-        } else {
-            unsafe { addr.d.into() }
-        };
-
-        if self.ir_data.oper {
-            GPRSize::X16(self.get_u16(ram, virt_addr))
-        } else if self.ir_data.rex.contains(REX::W) {
-            GPRSize::X64(self.get_u64(ram, virt_addr))
-        } else {
-            GPRSize::X32(self.get_u32(ram, virt_addr))
+        let gpr: GPRs = gpr_idx.try_into().unwrap();
+        unsafe {
+            match self.decode_size(&Location::Operand) {
+                GPRSize::X16(_) => GPRSize::X16(self[gpr].uw),
+                GPRSize::X32(_) => GPRSize::X32(self[gpr].ud),
+                GPRSize::X64(_) => GPRSize::X64(self[gpr].ur),
+            }
         }
     }
 
     pub fn decode_mem_size(&mut self, ram: &mut RAM, addr: Mem) -> GPRSize {
-        self.decode_mem_size_64(ram, addr)
+        let virt_addr: u64 = unsafe {
+            match self.decode_size(&Location::Address) {
+                GPRSize::X16(_) => addr.w.into(),
+                GPRSize::X32(_) => addr.r,
+                GPRSize::X64(_) => addr.d.into(),
+            }
+        };
+
+        match self.decode_size(&Location::Operand) {
+            GPRSize::X16(_) => GPRSize::X16(self.get_u16(ram, virt_addr)),
+            GPRSize::X32(_) => GPRSize::X32(self.get_u32(ram, virt_addr)),
+            GPRSize::X64(_) => GPRSize::X64(self.get_u64(ram, virt_addr)),
+        }
     }
 
-    pub fn decode_rm_gpr(&mut self, ram: &mut RAM, modrm: &ModRM) -> GPRSize {
-        if modrm.rmtype == ModRMType::RegReg {
-            modrm.reg2.map_or_else(|| unreachable!(), |reg| {
-                self.decode_gpr_size(reg)
-            })
-        } else {
-            self.decode_mem_size(ram, modrm.addr)
+    pub fn decode_rm_size(&mut self, ram: &mut RAM, modrm: &ModRM) -> GPRSize {
+        match modrm.reg2 {
+            Addr(mem) => self.decode_mem_size(ram, mem.addr),
+            Reg(reg) => self.decode_gpr_size(reg),
         }
     }
 }

@@ -67,7 +67,7 @@ impl CPU {
 
     pub fn setup_cache(&mut self, ram: &mut RAM) {
         let ip = self.get_mem_addr();
-        if let Some((_, cache)) = ram.read(Some(self.ir_cache), ip) {
+        if let Some((_, cache)) = ram.read(None, ip) {
             self.ir_cache = cache;
         } else {
             unreachable!()

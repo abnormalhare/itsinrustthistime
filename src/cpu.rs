@@ -5,6 +5,7 @@ mod reg;
 mod rw;
 mod msr;
 mod opcodes;
+mod debug;
 
 pub struct CPU {
     gprs: [GPR; 16],
@@ -46,14 +47,11 @@ impl CPU {
             ir_cache: 0,
             read_cache: None,
         };
-        cpu.setup_cache(ram);
 
         cpu[GPRs::DX].ud = 0x00A7_0F41;
 
         cpu[SRs::CS].base = 0xFFFF_0000;
 
-
-        cpu.ip.0.d = 0x0000_FFF0;
         let cr0 = CR0::from_bits_retain(0x6000_0010);
         cpu.set_cr(CRs::CR0, CRVals::CR0(cr0));
 
@@ -62,6 +60,8 @@ impl CPU {
 
         let dr7 = DR7::from_bits_retain(0x0000_0400);
         cpu.set_dr(DRs::DR7, DRVals::DR7(dr7));
+
+        cpu.setup_cache(ram);
 
         cpu
     }
@@ -108,21 +108,21 @@ impl CPU {
     // TODO: paging
     pub fn get_mem_addr(&self) -> u64 {
         if self.is_long_mode() {
-            unsafe { self.ip.0.r }
+            unsafe { self.ip.r }
         } else if self.is_protected_mode() {
-            unsafe { u64::from(self.ip.0.d + self[SRs::CS].base) }
+            unsafe { u64::from(self.ip.d + self[SRs::CS].base) }
         } else {
-            unsafe { u64::from(self.ip.0.w) + u64::from(self[SRs::CS].base) }
+            unsafe { u64::from(self.ip.w) + u64::from(self[SRs::CS].base) }
         }
     }
 
     pub fn increment_ip(&mut self) {
         if self.is_long_mode() {
-            unsafe { self.ip.0.r += 1 };
+            unsafe { self.ip.r += 1 };
         } else if self.is_protected_mode() {
-            unsafe { self.ip.0.d += 1 };
+            unsafe { self.ip.d += 1 };
         } else {
-            unsafe { self.ip.0.w += 1 };
+            unsafe { self.ip.w += 1 };
         }
     }
 

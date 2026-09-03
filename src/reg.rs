@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use bitflags::bitflags;
 
 #[repr(C)]
@@ -27,7 +29,7 @@ pub union GPR {
     pub sr: i64,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum GPRs {
     AX  = 0x0,
     CX  = 0x1,
@@ -57,7 +59,25 @@ impl TryFrom<u8> for GPRs {
     type Error = ();
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        value.try_into()
+        match value {
+            0  => Ok(Self::AX),
+            1  => Ok(Self::CX),
+            2  => Ok(Self::DX),
+            3  => Ok(Self::BX),
+            4  => Ok(Self::SP),
+            5  => Ok(Self::BP),
+            6  => Ok(Self::SI),
+            7  => Ok(Self::DI),
+            8  => Ok(Self::R8),
+            9  => Ok(Self::R9),
+            10 => Ok(Self::R10),
+            11 => Ok(Self::R11),
+            12 => Ok(Self::R12),
+            13 => Ok(Self::R13),
+            14 => Ok(Self::R14),
+            15 => Ok(Self::R15),
+            _ => Err(())
+        }
     }
 }
 
@@ -68,11 +88,12 @@ pub union Mem {
     pub r: u64,
 }
 
-pub struct IPR(pub Mem);
+#[allow(clippy::upper_case_acronyms)]
+pub type IPR = Mem;
 
 impl Default for IPR {
     fn default() -> Self {
-        IPR { 0: Mem { r: 0 } }
+        Self { r: 0x0000_FFF0 }
     }
 }
 

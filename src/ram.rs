@@ -81,15 +81,15 @@ impl RAM {
         let mut iter = self.addrs.range(virt_addr..);
         _ = iter.next();
 
-        let size: u16;
+        let size: RAMIndexSize;
         if let Some((_, next_val)) = iter.next() {
             let curr_file_addr = self.addrs[&virt_addr].file;
             let next_file_addr = next_val.file;
-            let possible_size = next_file_addr - curr_file_addr;
+            let possible_size = next_file_addr.abs_diff(curr_file_addr);
             if possible_size > RAMIndexSize::MAX.into() {
                 return Err(FileAddrSizeError::CacheTooBig(virt_addr, self.data.len() as u64, possible_size));
             }
-            size = (next_file_addr - curr_file_addr).try_into().unwrap();
+            size = possible_size.try_into().unwrap();
         } else if let Ok(metadata) = self.file.metadata() {
             let last_addr = self.addrs.last_entry().unwrap();
             size = (metadata.len() - last_addr.get().file).try_into().unwrap();
@@ -143,6 +143,8 @@ impl RAM {
     }
 
     fn cache_data(&mut self, virt_addr: u64) {
+        println!("CACHING --- {virt_addr:#x}");
+
         if !self.addrs.contains_key(&virt_addr) {
             unreachable!();
         }
@@ -169,7 +171,7 @@ impl RAM {
             .unwrap_or_else(|err| Self::load_from_handle(err));
     }
 
-    fn read_unchecked(&self, cached_virt_addr: u64, virt_addr: u64) -> u8 {
+    unsafe fn read_unchecked(&self, cached_virt_addr: u64, virt_addr: u64) -> u8 {
         let data_idx = self.addrs[&cached_virt_addr].data;
 
         data_idx.map_or_else(|| unreachable!(),
@@ -200,7 +202,7 @@ impl RAM {
 
             self.cache_data(new_cached_virt_addr);
 
-            let data = self.read_unchecked(new_cached_virt_addr, virt_addr);
+            let data = unsafe { self.read_unchecked(new_cached_virt_addr, virt_addr) };
             return Some((data, new_cached_virt_addr));
         }
 
@@ -220,13 +222,18 @@ impl RAM {
 
     fn try_read_cached(&mut self, cached_virt_addr: u64, virt_addr: u64) -> Option<u8> {
         if self.cached_addr_contains_addr(cached_virt_addr, virt_addr) {
-            Some(self.read_unchecked(cached_virt_addr, virt_addr))
+            Some(unsafe { self.read_unchecked(cached_virt_addr, virt_addr) })
         } else {
             None
         }
     }
 
     pub fn read(&mut self, cached_virt_addr: Option<u64>, virt_addr: u64) -> Option<(u8, u64)> {
+        match cached_virt_addr {
+            Some(addr) => println!("reading {virt_addr:#x} cached @ {addr:#x}"),
+            None => println!("reading {virt_addr:#x} with no cache"),
+        }
+
         if let Some(cached_virt_addr) = cached_virt_addr {
             self.try_read_cached(cached_virt_addr, virt_addr).map_or_else(|| {
                 self.try_get_nearest_virt_data(virt_addr, Some(cached_virt_addr))
