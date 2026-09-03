@@ -40,11 +40,11 @@ impl CPU {
                 let cr4: CR4 = self.get_cr(&CRs::CR4).try_into().unwrap();
 
                 if cr4.contains(CR4::PCIDE) {
-                    CRVals::CR3(CR3::ENABLED(
+                    CRVals::CR3(CR3::Enabled(
                         CR3PCID::from_bits_retain(raw)
                     ))
                 } else {
-                    CRVals::CR3(CR3::DISABLED(
+                    CRVals::CR3(CR3::Disabled(
                         CR3NOPCID::from_bits_retain(raw)
                     ))
                 }
@@ -58,8 +58,8 @@ impl CPU {
         match (cr, val) {
             (CRs::CR0, CRVals::CR0(cr0)) => self.crs[0] = cr0.bits(),
             (CRs::CR2, CRVals::CR2(cr2)) => self.crs[2] = cr2,
-            (CRs::CR3, CRVals::CR3(CR3::DISABLED(cr3))) => self.crs[2] = cr3.bits(),
-            (CRs::CR3, CRVals::CR3(CR3::ENABLED(cr3))) => self.crs[2] = cr3.bits(),
+            (CRs::CR3, CRVals::CR3(CR3::Disabled(cr3))) => self.crs[2] = cr3.bits(),
+            (CRs::CR3, CRVals::CR3(CR3::Enabled(cr3))) => self.crs[2] = cr3.bits(),
             (CRs::CR4, CRVals::CR4(cr4)) => self.crs[4] = cr4.bits(),
             (CRs::CR8, CRVals::CR8(cr8)) => self.crs[4] = cr8.into_raw(),
             _ => unreachable!()
@@ -86,7 +86,7 @@ impl CPU {
         }
     }
 
-    pub fn get_dr(&self, dr: &DRs) -> DRVals {
+    pub const fn get_dr(&self, dr: &DRs) -> DRVals {
         match dr {
             DRs::DR0 => DRVals::DR0(self.drs[0]),
             DRs::DR1 => DRVals::DR1(self.drs[1]),

@@ -4,13 +4,13 @@ use bitflags::bitflags;
 #[derive(Clone, Copy)]
 pub struct UHighBits {
     pub ls: u8,
-    pub ms: i8,
+    pub ms: u8,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct LHighBits {
-    pub ls: u8,
+pub struct SHighBits {
+    pub ls: i8,
     pub ms: i8,
 }
 
@@ -18,7 +18,7 @@ pub struct LHighBits {
 #[derive(Clone, Copy)]
 pub union GPR {
     pub ub: UHighBits,
-    pub sb: LHighBits,
+    pub sb: SHighBits,
     pub uw: u16,
     pub sw: i16,
     pub ud: u32,
@@ -29,22 +29,22 @@ pub union GPR {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GPRs {
-    AX,
-    CX,
-    DX,
-    BX,
-    SP,
-    BP,
-    SI,
-    DI,
-    R8,
-    R9,
-    R10,
-    R11,
-    R12,
-    R13,
-    R14,
-    R15,
+    AX  = 0x0,
+    CX  = 0x1,
+    DX  = 0x2,
+    BX  = 0x3,
+    SP  = 0x4,
+    BP  = 0x5,
+    SI  = 0x6,
+    DI  = 0x7,
+    R8  = 0x8,
+    R9  = 0x9,
+    R10 = 0xA,
+    R11 = 0xB,
+    R12 = 0xC,
+    R13 = 0xD,
+    R14 = 0xE,
+    R15 = 0xF,
 }
 
 impl Default for GPR {
@@ -53,6 +53,15 @@ impl Default for GPR {
     }
 }
 
+impl TryFrom<u8> for GPRs {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        value.try_into()
+    }
+}
+
+#[derive(Clone, Copy)]
 pub union Mem {
     pub w: u16,
     pub d: u32,
@@ -73,17 +82,17 @@ pub struct SR {
 }
 
 impl SR {
-    pub fn new(val: u16) -> Self {
-        let mut ret: Self = SR { base: 0, limit: 0xFFF };
+    pub const fn new(val: u16) -> Self {
+        let mut ret = Self { base: 0, limit: 0xFFF };
         ret.set(val);
         ret
     }
 
-    pub fn get(&self) -> u16 {
+    pub const fn get(&self) -> u16 {
         ((self.base & 0x000F_FFF0) >> 4) as u16
     }
 
-    pub fn set(&mut self, val: u16) {
+    pub const fn set(&mut self, val: u16) {
         self.base = (val as u32) << 4;
     }
 }
@@ -115,7 +124,7 @@ pub struct DTR {
 
 impl Default for DTR {
     fn default() -> Self {
-        DTR { limit: 0xFFFF, base: Mem { r: 0 } }
+        Self { limit: 0xFFFF, base: Mem { r: 0 } }
     }
 }
 
@@ -207,8 +216,8 @@ impl TryFrom<CRVals> for CR0 {
 }
 
 pub enum CR3 {
-    DISABLED(CR3NOPCID),
-    ENABLED(CR3PCID),
+    Disabled(CR3NOPCID),
+    Enabled(CR3PCID),
 }
 
 impl TryFrom<CR3> for CR3NOPCID {
@@ -216,8 +225,8 @@ impl TryFrom<CR3> for CR3NOPCID {
 
     fn try_from(value: CR3) -> Result<Self, Self::Error> {
         match value {
-            CR3::DISABLED(val) => Ok(val),
-            _ => Err(()),
+            CR3::Disabled(val) => Ok(val),
+            CR3::Enabled(_) => Err(()),
         }
     }
 }
@@ -227,8 +236,8 @@ impl TryFrom<CR3> for CR3PCID {
 
     fn try_from(value: CR3) -> Result<Self, Self::Error> {
         match value {
-            CR3::ENABLED(val) => Ok(val),
-            _ => Err(()),
+            CR3::Disabled(_) => Err(()),
+            CR3::Enabled(val) => Ok(val),
         }
     }
 }
@@ -269,25 +278,25 @@ impl TryFrom<CRVals> for CR8 {
 }
 
 impl CR8 {
-    pub fn new(val: u8) -> Self {
-        let mut ret: Self = CR8(0);
+    pub const fn new(val: u8) -> Self {
+        let mut ret = Self(0);
         ret.set(val);
         ret
     }
 
-    pub fn from_raw(val: u64) -> Self {
-        CR8(val)
+    pub const fn from_raw(val: u64) -> Self {
+        Self(val)
     }
 
-    pub fn into_raw(self) -> u64 {
+    pub const fn into_raw(self) -> u64 {
         self.0
     }
 
-    pub fn get(&self) -> u8 {
+    pub const fn get(&self) -> u8 {
         (self.0 & 0b1111) as u8
     }
 
-    pub fn set(&mut self, val: u8) {
+    pub const fn set(&mut self, val: u8) {
         self.0 = (val & 0b1111) as u64;
     }
 }
@@ -305,11 +314,11 @@ impl TryFrom<u8> for CRs {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(CRs::CR0),
-            2 => Ok(CRs::CR2),
-            3 => Ok(CRs::CR3),
-            4 => Ok(CRs::CR4),
-            8 => Ok(CRs::CR8),
+            0 => Ok(Self::CR0),
+            2 => Ok(Self::CR2),
+            3 => Ok(Self::CR3),
+            4 => Ok(Self::CR4),
+            8 => Ok(Self::CR8),
             _ => unreachable!(),
         }
     }
@@ -373,12 +382,12 @@ impl TryFrom<u8> for DRs {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(DRs::DR0),
-            1 => Ok(DRs::DR1),
-            2 => Ok(DRs::DR2),
-            3 => Ok(DRs::DR3),
-            6 => Ok(DRs::DR6),
-            7 => Ok(DRs::DR7),
+            0 => Ok(Self::DR0),
+            1 => Ok(Self::DR1),
+            2 => Ok(Self::DR2),
+            3 => Ok(Self::DR3),
+            6 => Ok(Self::DR6),
+            7 => Ok(Self::DR7),
             _ => unreachable!(),
         }
     }
@@ -392,18 +401,6 @@ pub enum DRVals {
     DR6(DR6),
     DR7(DR7),
 }
-
-pub enum Register {
-    GPR(GPR),
-    SR(SR),
-    MMR(MMR),
-    XMMR(XMMR),
-    CR(CRs),
-    DR(DRs),
-}
-
-
-
 
 bitflags! {
     pub struct REX: u8 {

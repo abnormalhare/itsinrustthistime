@@ -1,25 +1,23 @@
 use std::{collections::BTreeMap, fs::File, io::{Error, Read, Seek}, panic::panic_any};
 
-struct Address {
-    data: Option<u16>,
-    file: u64,
+use crate::qemu::{self, InitError};
+
+pub struct Address {
+    pub data: Option<u16>,
+    pub file: u64,
+    pub write: bool,
 }
 
 type RAMIndexSize = u16;
+pub type AddressMap = BTreeMap<u64, Address>;
 
 #[allow(clippy::upper_case_acronyms)]
 pub struct RAM {
     data: Box<[u8]>,
     file: File,
-    addrs: BTreeMap<u64, Address>,
+    addrs: AddressMap,
     offset: u64,
     data_pos: RAMIndexSize,
-}
-
-enum InitError {
-    ReadError(Error),
-    InvalidFile,
-    CorruptedFile,
 }
 
 enum FileAddrSizeError {
@@ -34,82 +32,45 @@ enum LoadFromError {
 }
 
 impl RAM {
-    pub fn new(filename: &str) -> Self {
-        let file = File::open(filename)
-            .unwrap_or_else(|_| panic!("File {filename} does not exist!"));
+    pub fn new(filename: &str) -> Option<Self> {
+        let mut file = qemu::open(filename);
+        let res = qemu::read(&mut file);
 
-        if let Err(err) = file.lock() {
-            println!("Failed to get lock on file {filename}: {err}");
+        if let Err(err) = res {
+            match err {
+                InitError::ReadError(ioerr) => {
+                    println!("Failed to read file: {ioerr}");
+                },
+                InitError::InvalidFile => {
+                    println!("File loaded is not a CS86 file.");
+                },
+                InitError::CorruptedFile => {
+                    println!("File loaded is either invalid or corrupted.");
+                }
+            }
+
+            return None;
         }
+
+        let addrs: AddressMap = res.ok().unwrap();
 
         let mut ram = Self {
             data: vec![0; RAMIndexSize::MAX as usize].into_boxed_slice(),
             file,
-            addrs: BTreeMap::new(),
+            addrs,
             offset: 0,
             data_pos: 0,
         };
 
-        if let Err(err) = ram.read_in() { match err {
-            InitError::ReadError(ioerr) => {
-                println!("Failed to read file: {ioerr}");
-            },
-            InitError::InvalidFile => {
-                println!("File loaded is not a CS86 file.");
-            },
-            InitError::CorruptedFile => {
-                println!("File loaded is either invalid or corrupted.");
-            }
-        }}
+        if let Ok(pos) = ram.file.stream_position() {
+            ram.offset = pos;
+        }
 
-        ram
+        Some(ram)
     }
 
     pub fn deinit(&self) {
         _ = self.file.unlock();
-    }
-
-    fn read_in(&mut self) -> Result<(), InitError> {
-        let mut header = [0u8; 0x8];
-        let bytes = self.file.read(&mut header);
-        if let Err(err) = bytes {
-            return Err(InitError::ReadError(err));
-        }
-
-        let bytes = bytes.ok().unwrap();
-        if bytes != header.len() || &header[0..4] != b"CS86" {
-            return Err(InitError::InvalidFile)
-        }
-
-        let num_virt_addrs = header[4] as usize;
-        let mut virt_addrs = vec![0u8; num_virt_addrs * 8];
-        let bytes = self.file.read(&mut virt_addrs);
-        if let Err(err) = bytes {
-            return Err(InitError::ReadError(err));
-        }
-
-        let bytes = bytes.ok().unwrap();
-        if bytes != virt_addrs.len() {
-            return Err(InitError::CorruptedFile);
-        }
-
-        let mut num_virt_addrs = num_virt_addrs;
-        let mut i = 0;
-        while num_virt_addrs > 0 {
-            let virt_addr = u32::from_le_bytes(virt_addrs[i..(i + 4)].try_into().unwrap());
-            let file_addr = u32::from_le_bytes(virt_addrs[(i + 4)..(i + 8)].try_into().unwrap());
-
-            self.addrs.insert(u64::from(virt_addr), Address { data: None, file: u64::from(file_addr) });
-
-            num_virt_addrs -= 1;
-            i += 8;
-        }
-
-        if let Ok(pos) = self.file.stream_position() {
-            self.offset = pos;
-        }
-
-        Ok(())
     }
 
     fn get_file_addr_size(&mut self, virt_addr: u64) -> Result<u16, FileAddrSizeError> {

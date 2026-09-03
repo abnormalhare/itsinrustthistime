@@ -1,6 +1,6 @@
 use crate::{cpu::msr::{IA32EFER, MSRs}, ram::RAM, reg::{CR0, CRVals, CRs, DR6, DR7, DRVals, DRs, DTR, FR, GPR, GPRs, IPR, InstrData, SR, SRs}};
 
-mod modrm;
+mod decode;
 mod reg;
 mod rw;
 mod msr;
@@ -22,7 +22,9 @@ pub struct CPU {
 
     ir: u8,
     ir_data: InstrData,
-    cache_addr: u64,
+    ir_cache: u64,
+
+    read_cache: Option<u64>,
 }
 
 impl CPU {
@@ -41,7 +43,8 @@ impl CPU {
             tr: SR::new(0),
             ir: 0,
             ir_data: InstrData::default(),
-            cache_addr: 0,
+            ir_cache: 0,
+            read_cache: None,
         };
         cpu.setup_cache(ram);
 
@@ -107,9 +110,9 @@ impl CPU {
         if self.is_long_mode() {
             unsafe { self.ip.0.r }
         } else if self.is_protected_mode() {
-            unsafe { (self.ip.0.d + self[SRs::CS].base) as u64 }
+            unsafe { u64::from(self.ip.0.d + self[SRs::CS].base) }
         } else {
-            unsafe { (self.ip.0.w as u32 + self[SRs::CS].base) as u64 }
+            unsafe { u64::from(self.ip.0.w) + u64::from(self[SRs::CS].base) }
         }
     }
 
@@ -124,7 +127,7 @@ impl CPU {
     }
 
     pub fn run(&mut self, ram: &mut RAM) {
-        self.read_instr(ram);
+        self.read_u8(ram);
         Self::OPCODES[self.ir as usize](self, ram);
     }
 }

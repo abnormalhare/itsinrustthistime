@@ -1,4 +1,4 @@
-use crate::{cpu::CPU, ram::RAM};
+use crate::{cpu::{CPU, decode::GPRSize}, ram::RAM, reg::GPRs};
 
 
 impl CPU {
@@ -8,7 +8,16 @@ impl CPU {
 
     fn op_03(&mut self, ram: &mut RAM) {
         let modrm = self.decode_modrm(ram);
-        panic!("unimplemented opcode: {}", self.ir);
+        let val = self.decode_rm_gpr(ram, &modrm);
+        let gpr: GPRs = modrm.reg1.try_into().unwrap();
+
+        unsafe {
+            match val {
+                GPRSize::X16(val) => self[gpr].uw += val,
+                GPRSize::X32(val) => self[gpr].ud += val,
+                GPRSize::X64(val) => self[gpr].ur += val,
+            }
+        }
     }
 }
 
